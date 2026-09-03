@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cicle — Feed</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="header-placeholder"></div>
+
+  <main class="container">
+    <div id="composer-placeholder"></div>
+    <div id="feed" ><p>Loading feed...</p></div>
+  </main>
+
+  <script src="js/common.js"></script>
+  <script>
+    const currentUser = getUser();
+
+    function renderComposer() {
+      const el = document.getElementById("composer-placeholder");
+      if (!currentUser) {
+        el.innerHTML = `
+          <div class="composer">
+            <p style="margin:0;color:var(--muted);">
+              <a href="login.html" style="color:var(--primary);font-weight:600;">Log in</a> to share something with the community.
+            </p>
+          </div>`;
+        return;
+      }
+      el.innerHTML = `
+        <div class="composer">
+          <textarea id="post-content" placeholder="What's on your mind, ${escapeHtml(currentUser.name.split(" ")[0])}?" maxlength="500"></textarea>
+          <div class="composer-footer">
+            <button class="btn btn-primary" id="post-btn">Post</button>
+          </div>
+        </div>`;
+
+      document.getElementById("post-btn").addEventListener("click", async () => {
+        const content = document.getElementById("post-content").value.trim();
+        if (!content) return;
+        try {
+          await apiFetch("/posts", { method: "POST", body: JSON.stringify({ content }) });
+          document.getElementById("post-content").value = "";
+          showToast("Posted!");
+          loadFeed();
+        } catch (err) {
+          showToast(err.message);
+        }
+      });
+    }
+
+    async function loadFeed() {
+      const feed = document.getElementById("feed");
+      try {
+        const posts = await apiFetch("/posts");
+        if (!posts.length) {
+          feed.innerHTML = `<div class="empty-state">No posts yet. Be the first to share something!</div>`;
+          return;
+        }
+        feed.innerHTML = posts.map(renderPost).join("");
+        attachPostHandlers();
+      } catch (err) {
+        feed.innerHTML = `<div class="empty-state">Failed to load feed: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderPost(post) {
+      const liked = currentUser && post.likes.some((id) => (id._id || id) === currentUser._id);
+      const isAuthor = currentUser && post.user._id === currentUser._id;
+
+      return `
+        <div class="post-card" data-post-id="${post._id}">
+          <div class="post-head">
+            <a href="profile.html?username=${post.user.username}"><img class="avatar" src="${post.user.avatar}" alt="${escapeHtml(post.user.name)}" /></a>
+            <div>
+              <a href="profile.html?username=${post.user.username}"><div class="post-author">${escapeHtml(post.user.name)}</div></a>
+              <div class="post-username">@${post.user.username}</div>
+            </div>
+            <span class="post-time">${timeAgo(post.createdAt)}</span>
+          </div>
+          <div class="post-content">${escapeHtml(post.content)}</div>
+          <div class="post-actions">
+            <button class="like-btn ${liked ? "liked" : ""}" data-id="${post._id}">
+              ${liked ? "❤️" : "🤍"} <span class="like-count">${post.likes.length}</span>
+            </button>
+            <button class="comment-toggle" data-id="${post._id}">💬 <span>${post.comments.length}</span></button>
+            ${isAuthor ? `<button class="delete-post" data-id="${post._id}" style="margin-left:auto;color:var(--danger);">Delete</button>` : ""}
+          </div>
+          <div class="comments" id="comments-${post._id}" style="display:none;">
+            ${post.comments.map(renderComment).join("")}
+            ${
+              currentUser
+                ? `<div class="comment-form">
+                     <input type="text" placeholder="Write a comment..." class="comment-input" data-id="${post._id}" maxlength="300" />
+                     <button class="btn btn-primary btn-sm comment-submit" data-id="${post._id}">Send</button>
+                   </div>`
+                : ""
+            }
+          </div>
+        </div>
+      `;
+    }
+
+    function renderComment(c) {
+      return `
+        <div class="comment">
+          <img class="avatar-sm" src="${c.userAvatar || c.user?.avatar || ""}" alt="" />
+          <div class="comment-body">
+            <div class="comment-author">${escapeHtml(c.userName || c.user?.name || "User")}</div>
+            <div class="comment-text">${escapeHtml(c.text)}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function attachPostHandlers() {
+      document.querySelectorAll(".like-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!currentUser) { window.location.href = "login.html"; return; }
+          const id = btn.dataset.id;
+          try {
+            const res = await apiFetch(`/posts/${id}/like`, { method: "POST" });
+            btn.classList.toggle("liked", res.liked);
+            btn.innerHTML = `${res.liked ? "❤️" : "🤍"} <span class="like-count">${res.likes.length}</span>`;
+          } catch (err) {
+            showToast(err.message);
+          }
+        });
+      });
+
+      document.querySelectorAll(".comment-toggle").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const box = document.getElementById(`comments-${btn.dataset.id}`);
+          box.style.display = box.style.display === "none" ? "block" : "none";
+        });
+      });
+
+      document.querySelectorAll(".comment-submit").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.id;
+          const input = document.querySelector(`.comment-input[data-id="${id}"]`);
+          const text = input.value.trim();
+          if (!text) return;
+          try {
+            await apiFetch(`/posts/${id}/comments`, { method: "POST", body: JSON.stringify({ text }) });
+            input.value = "";
+            loadFeed();
+          } catch (err) {
+            showToast(err.message);
+          }
+        });
+      });
+
+      document.querySelectorAll(".delete-post").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("Delete this post?")) return;
+          try {
+            await apiFetch(`/posts/${btn.dataset.id}`, { method: "DELETE" });
+            loadFeed();
+          } catch (err) {
+            showToast(err.message);
+          }
+        });
+      });
+    }
+
+    renderComposer();
+    loadFeed();
+  </script>
+</body>
+</html>

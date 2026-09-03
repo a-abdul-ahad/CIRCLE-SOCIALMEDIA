@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profile — CodeAlphaConnect</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="header-placeholder"></div>
+
+  <main class="container">
+    <div id="profile-header"><p>Loading profile...</p></div>
+    <div id="profile-posts"></div>
+  </main>
+
+  <script src="js/common.js"></script>
+  <script>
+    const currentUser = getUser();
+    const params = new URLSearchParams(window.location.search);
+    const username = params.get("username");
+
+    async function loadProfile() {
+      const headerEl = document.getElementById("profile-header");
+      if (!username) {
+        headerEl.innerHTML = `<div class="empty-state">No profile specified.</div>`;
+        return;
+      }
+
+      try {
+        const user = await apiFetch(`/users/${username}`);
+        const isOwnProfile = currentUser && currentUser._id === user._id;
+        const isFollowing = currentUser && user.followers.some((f) => f._id === currentUser._id);
+
+        headerEl.innerHTML = `
+          <div class="profile-header">
+            <img class="avatar" src="${user.avatar}" alt="${escapeHtml(user.name)}" />
+            <div>
+              <h2 style="margin-bottom:2px;">${escapeHtml(user.name)}</h2>
+              <div class="post-username">@${user.username}</div>
+              ${user.bio ? `<p style="margin:8px 0 0;font-size:0.92rem;">${escapeHtml(user.bio)}</p>` : ""}
+              <div class="profile-stats">
+                <span><strong>${user.postCount}</strong> posts</span>
+                <span><strong>${user.followers.length}</strong> followers</span>
+                <span><strong>${user.following.length}</strong> following</span>
+              </div>
+            </div>
+            <div class="profile-actions">
+              ${
+                isOwnProfile
+                  ? ""
+                  : currentUser
+                  ? `<button class="btn ${isFollowing ? "btn-outline" : "btn-primary"}" id="follow-btn" data-id="${user._id}" data-following="${isFollowing}">
+                       ${isFollowing ? "Unfollow" : "Follow"}
+                     </button>`
+                  : ""
+              }
+            </div>
+          </div>
+        `;
+
+        const followBtn = document.getElementById("follow-btn");
+        if (followBtn) {
+          followBtn.addEventListener("click", async () => {
+            const isFollowingNow = followBtn.dataset.following === "true";
+            try {
+              await apiFetch(`/users/${user._id}/${isFollowingNow ? "unfollow" : "follow"}`, { method: "POST" });
+              loadProfile();
+            } catch (err) {
+              showToast(err.message);
+            }
+          });
+        }
+
+        loadUserPosts(user._id);
+      } catch (err) {
+        headerEl.innerHTML = `<div class="empty-state">Failed to load profile: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function loadUserPosts(userId) {
+      const postsEl = document.getElementById("profile-posts");
+      try {
+        const posts = await apiFetch(`/posts?user=${userId}`);
+        if (!posts.length) {
+          postsEl.innerHTML = `<div class="empty-state">No posts yet.</div>`;
+          return;
+        }
+        postsEl.innerHTML = posts
+          .map(
+            (p) => `
+          <div class="post-card">
+            <div class="post-content">${escapeHtml(p.content)}</div>
+            <div class="post-actions" style="border-top:1px solid #eee;">
+              <span>🤍 ${p.likes.length}</span>
+              <span>💬 ${p.comments.length}</span>
+              <span class="post-time" style="margin-left:auto;">${timeAgo(p.createdAt)}</span>
+            </div>
+          </div>
+        `
+          )
+          .join("");
+      } catch (err) {
+        postsEl.innerHTML = `<div class="empty-state">Failed to load posts: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    loadProfile();
+  </script>
+</body>
+</html>
