@@ -73,7 +73,7 @@ function renderHeader() {
   placeholder.innerHTML = `
     <header class="site-header">
       <div class="header-inner">
-        <a class="logo" href="index.html">Circle</a>
+        <a class="logo" href="index.html"> <img id="logo" src="images/circlelogo.png" alt="Circle Logo" /> Circle</a>
         <nav class="nav-links">
           <a href="index.html" class="${path === "index.html" || path === "" ? "active" : ""}">Feed</a>
           ${

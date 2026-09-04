@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cicle — Feed</title>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css" />
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <div id="header-placeholder"></div>
@@ -17,6 +17,7 @@
 
   <script src="js/common.js"></script>
   <script>
+    requireAuth();
     const currentUser = getUser();
 
     function renderComposer() {
@@ -25,7 +26,7 @@
         el.innerHTML = `
           <div class="composer">
             <p style="margin:0;color:var(--muted);">
-              <a href="login.html" style="color:var(--primary);font-weight:600;">Log in</a> to share something with the community.
+            <a href="login.html" style="color:var(--primary);font-weight:600;">Log in</a> to share something with the community.
             </p>
           </div>`;
         return;
@@ -34,6 +35,8 @@
         <div class="composer">
           <textarea id="post-content" placeholder="What's on your mind, ${escapeHtml(currentUser.name.split(" ")[0])}?" maxlength="500"></textarea>
           <div class="composer-footer">
+            <button class="btn btn-primary" id="img-btn">🌆</button>
+             <button class="btn btn-primary" id="vid-btn">🎬</button>
             <button class="btn btn-primary" id="post-btn">Post</button>
           </div>
         </div>`;
