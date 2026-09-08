@@ -31,26 +31,96 @@
           </div>`;
         return;
       }
+      
+      // 1. Updated Composer HTML with the Preview Box
       el.innerHTML = `
         <div class="composer">
           <textarea id="post-content" placeholder="What's on your mind, ${escapeHtml(currentUser.name.split(" ")[0])}?" maxlength="500"></textarea>
+          
+          <!-- Media Preview Box -->
+          <div id="mediaPreviewContainer" style="display: none; position: relative; margin-top: 10px; margin-bottom: 10px; border-radius: 8px; overflow: hidden; background: #1E293B;">
+              <button id="removeMediaBtn" style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; font-weight: bold; z-index: 10;">✕</button>
+              <img id="imagePreview" style="display: none; width: 100%; max-height: 350px; object-fit: contain;">
+              <video id="videoPreview" controls style="display: none; width: 100%; max-height: 350px; object-fit: contain;"></video>
+          </div>
+
           <div class="composer-footer">
-            <button class="btn btn-primary" id="img-btn">🌆</button>
-             <button class="btn btn-primary" id="vid-btn">🎬</button>
+            <input type="file" id="mediaUpload" accept="image/*,video/*" style="display: none;">
+            <button class="btn btn-primary" id="img-btn" onclick="document.getElementById('mediaUpload').click()">🌆</button>
+            <button class="btn btn-primary" id="vid-btn" onclick="document.getElementById('mediaUpload').click()">🎬</button>
             <button class="btn btn-primary" id="post-btn">Post</button>
           </div>
         </div>`;
 
-      document.getElementById("post-btn").addEventListener("click", async () => {
+      // 2. Add Event Listeners for the Preview Box
+      const mediaInput = document.getElementById("mediaUpload");
+      const previewContainer = document.getElementById("mediaPreviewContainer");
+      const imagePreview = document.getElementById("imagePreview");
+      const videoPreview = document.getElementById("videoPreview");
+      const removeMediaBtn = document.getElementById("removeMediaBtn");
+
+      function clearPreview() {
+        mediaInput.value = "";
+        previewContainer.style.display = "none";
+        imagePreview.src = "";
+        videoPreview.src = "";
+        imagePreview.style.display = "none";
+        videoPreview.style.display = "none";
+      }
+
+      mediaInput.addEventListener("change", function() {
+        const file = this.files[0];
+        if (file) {
+          const fileUrl = URL.createObjectURL(file);
+          previewContainer.style.display = "block";
+          if (file.type.startsWith("video/")) {
+            imagePreview.style.display = "none";
+            videoPreview.src = fileUrl;
+            videoPreview.style.display = "block";
+          } else if (file.type.startsWith("image/")) {
+            videoPreview.style.display = "none";
+            imagePreview.src = fileUrl;
+            imagePreview.style.display = "block";
+          }
+        } else {
+          clearPreview();
+        }
+      });
+
+      removeMediaBtn.addEventListener("click", clearPreview);
+
+      // 3. Updated Post Button Logic (Using FormData)
+      const postBtn = document.getElementById("post-btn");
+      postBtn.addEventListener("click", async () => {
         const content = document.getElementById("post-content").value.trim();
-        if (!content) return;
+        const mediaFile = mediaInput.files[0];
+
+        if (!content && !mediaFile) return; // Prevent empty posts
+
+        postBtn.disabled = true;
+        postBtn.textContent = "Posting...";
+
+        const formData = new FormData();
+        formData.append("content", content);
+        if (mediaFile) {
+          formData.append("media", mediaFile);
+        }
+
         try {
-          await apiFetch("/posts", { method: "POST", body: JSON.stringify({ content }) });
+          await apiFetch("/posts", { 
+            method: "POST", 
+            body: formData // Send formData instead of JSON
+          });
+          
           document.getElementById("post-content").value = "";
+          clearPreview(); // Clear the preview box after posting
           showToast("Posted!");
           loadFeed();
         } catch (err) {
           showToast(err.message);
+        } finally {
+          postBtn.disabled = false;
+          postBtn.textContent = "Post";
         }
       });
     }
@@ -70,9 +140,21 @@
       }
     }
 
+    // 4. Updated renderPost to display the image/video
     function renderPost(post) {
       const liked = currentUser && post.likes.some((id) => (id._id || id) === currentUser._id);
       const isAuthor = currentUser && post.user._id === currentUser._id;
+
+      let mediaHtml = "";
+      if (post.mediaUrl && post.mediaType === "image") {
+        mediaHtml = `<div class="post-media" style="margin-top: 10px;">
+                       <img src="${post.mediaUrl}" alt="Post image" style="width: 100%; max-height: 500px; border-radius: 8px; object-fit: cover;">
+                     </div>`;
+      } else if (post.mediaUrl && post.mediaType === "video") {
+        mediaHtml = `<div class="post-media" style="margin-top: 10px;">
+                       <video src="${post.mediaUrl}" controls style="width: 100%; max-height: 500px; border-radius: 8px;"></video>
+                     </div>`;
+      }
 
       return `
         <div class="post-card" data-post-id="${post._id}">
@@ -84,7 +166,12 @@
             </div>
             <span class="post-time">${timeAgo(post.createdAt)}</span>
           </div>
+          
           <div class="post-content">${escapeHtml(post.content)}</div>
+          
+          <!-- Render the media here -->
+          ${mediaHtml}
+          
           <div class="post-actions">
             <button class="like-btn ${liked ? "liked" : ""}" data-id="${post._id}">
               ${liked ? "❤️" : "🤍"} <span class="like-count">${post.likes.length}</span>

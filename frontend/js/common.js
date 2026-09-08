@@ -20,7 +20,14 @@ function requireAuth() {
 }
 
 async function apiFetch(path, options = {}) {
-  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  const headers = { ...(options.headers || {}) };
+  
+  // CRITICAL CHANGE: Only set application/json if the body is NOT FormData.
+  // The browser MUST set the Content-Type automatically for file uploads.
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -97,4 +104,74 @@ function renderHeader() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", renderHeader);
+// STEP 7 LOGIC: Handle the file selection and post submission
+function setupPostCreation() {
+  const mediaInput = document.getElementById("mediaUpload"); // Matches the ID you add in HTML
+  const previewText = document.getElementById("uploadPreview"); // Matches the ID you add in HTML
+  const postContent = document.getElementById("postContent"); // Ensure your text input uses this ID
+  const publishBtn = document.getElementById("publishPostBtn"); // Ensure your post button uses this ID
+
+  // Only run this if we are on the page with the post inputs
+  if (!mediaInput || !publishBtn) return;
+
+  // Show selected file name
+  mediaInput.addEventListener("change", function() {
+    if (this.files[0]) {
+      previewText.textContent = `Selected: ${this.files[0].name}`;
+    } else {
+      previewText.textContent = "";
+    }
+  });
+
+  // Handle post submission
+  publishBtn.addEventListener("click", async () => {
+    const content = postContent.value;
+    const mediaFile = mediaInput.files[0];
+
+    if (!content.trim() && !mediaFile) {
+      return showToast("Please add some text or select a file.");
+    }
+
+    // Disable button to prevent double-clicking while uploading
+    publishBtn.disabled = true;
+    publishBtn.textContent = "Posting...";
+
+    const formData = new FormData();
+    formData.append("content", content);
+    if (mediaFile) {
+      formData.append("media", mediaFile);
+    }
+
+    try {
+      // Use our updated apiFetch, which automatically passes FormData correctly
+      await apiFetch("/posts", {
+        method: "POST",
+        body: formData // Pass the FormData directly, DO NOT use JSON.stringify
+      });
+
+      showToast("Posted successfully!");
+      
+      // Reset inputs
+      postContent.value = "";
+      mediaInput.value = "";
+      previewText.textContent = "";
+      
+      // Refresh the feed if the function exists on this page
+      if (typeof loadPosts === "function") {
+        loadPosts();
+      }
+    } catch (error) {
+      showToast(`Error: ${error.message}`);
+    } finally {
+      // Re-enable button
+      publishBtn.disabled = false;
+      publishBtn.textContent = "Post";
+    }
+  });
+}
+
+// Initialize everything when the DOM is ready
+document.addEventListener("DOMContentLoaded", () => {
+  renderHeader();
+  setupPostCreation(); // Initialize the post button logic
+});

@@ -2,6 +2,7 @@ const express = require("express");
 const Post = require("../models/Post");
 const User = require("../models/User");
 const { protect } = require("../middleware/auth");
+const upload = require("../config/upload"); // Added the upload middleware
 
 const router = express.Router();
 
@@ -36,14 +37,32 @@ router.get("/:id", async (req, res) => {
 });
 
 // @route   POST /api/posts  (create a post)
-router.post("/", protect, async (req, res) => {
+// ADDED: upload.single("media") middleware to handle the incoming file
+router.post("/", protect, upload.single("media"), async (req, res) => {
   try {
-    const { content, image } = req.body;
-    if (!content || !content.trim()) {
-      return res.status(400).json({ message: "Post content is required" });
+    const { content } = req.body;
+    let mediaUrl = null;
+    let mediaType = "none";
+
+    // If a file was uploaded, extract its URL and determine if it's an image or video
+    if (req.file) {
+      mediaUrl = req.file.path;
+      mediaType = req.file.mimetype.startsWith("video") ? "video" : "image";
     }
 
-    const post = await Post.create({ user: req.user.id, content, image: image || "" });
+    // Validation: Require EITHER text content OR a media file
+    if ((!content || !content.trim()) && !req.file) {
+      return res.status(400).json({ message: "Post content or media is required" });
+    }
+
+    // Create the post using the new schema fields
+    const post = await Post.create({ 
+      user: req.user.id, 
+      content: content || "", 
+      mediaUrl, 
+      mediaType 
+    });
+    
     const populated = await post.populate("user", "name username avatar");
 
     res.status(201).json(populated);
