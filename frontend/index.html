@@ -144,6 +144,9 @@
     function renderPost(post) {
       const liked = currentUser && post.likes.some((id) => (id._id || id) === currentUser._id);
       const isAuthor = currentUser && post.user._id === currentUser._id;
+      
+      // Determine if current user is following the post author
+      const isFollowing = currentUser && currentUser.following && currentUser.following.includes(post.user._id);
 
       let mediaHtml = "";
       if (post.mediaUrl && post.mediaType === "image") {
@@ -158,10 +161,16 @@
 
       return `
         <div class="post-card" data-post-id="${post._id}">
-          <div class="post-head">
+          <div class="post-head" style="display: flex; align-items: center;">
             <a href="profile.html?username=${post.user.username}"><img class="avatar" src="${post.user.avatar}" alt="${escapeHtml(post.user.name)}" /></a>
-            <div>
-              <a href="profile.html?username=${post.user.username}"><div class="post-author">${escapeHtml(post.user.name)}</div></a>
+            <div style="flex-grow: 1;">
+              <a href="profile.html?username=${post.user.username}" style="display: flex; align-items: center; gap: 8px;">
+                <div class="post-author">${escapeHtml(post.user.name)}</div>
+                
+                <!-- Feed Follow Button -->
+                ${currentUser && !isAuthor ? `<button class="btn btn-sm ${isFollowing ? 'btn-outline' : 'btn-primary'} feed-follow-btn" data-id="${post.user._id}" data-following="${isFollowing}" style="padding: 2px 8px; font-size: 0.75rem; line-height: 1.2;">${isFollowing ? 'Following' : 'Follow'}</button>` : ''}
+              
+              </a>
               <div class="post-username">@${post.user.username}</div>
             </div>
             <span class="post-time">${timeAgo(post.createdAt)}</span>
@@ -169,7 +178,6 @@
           
           <div class="post-content">${escapeHtml(post.content)}</div>
           
-          <!-- Render the media here -->
           ${mediaHtml}
           
           <div class="post-actions">
@@ -206,7 +214,8 @@
       `;
     }
 
-    function attachPostHandlers() {
+  function attachPostHandlers() {
+      // Like Buttons
       document.querySelectorAll(".like-btn").forEach((btn) => {
         btn.addEventListener("click", async () => {
           if (!currentUser) { window.location.href = "login.html"; return; }
@@ -221,6 +230,38 @@
         });
       });
 
+      // Feed Follow Buttons Logic
+      document.querySelectorAll(".feed-follow-btn").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          e.preventDefault(); // Prevent navigating to the profile link wrapper
+          const targetId = btn.dataset.id;
+          const isFollowingNow = btn.dataset.following === "true";
+          
+          try {
+            // Instantly update UI for snappy user experience
+            btn.dataset.following = !isFollowingNow;
+            btn.textContent = !isFollowingNow ? "Following" : "Follow";
+            btn.className = `btn btn-sm ${!isFollowingNow ? 'btn-outline' : 'btn-primary'} feed-follow-btn`;
+            
+            // Send API Request
+            await apiFetch(`/users/${targetId}/${isFollowingNow ? "unfollow" : "follow"}`, { method: "POST" });
+            
+            // Update the local storage array silently so other posts reflect the change
+            if (currentUser) {
+              if (!isFollowingNow) {
+                currentUser.following.push(targetId);
+              } else {
+                currentUser.following = currentUser.following.filter(id => id !== targetId);
+              }
+              setAuth({ token: getToken(), ...currentUser });
+            }
+          } catch (err) {
+            showToast(err.message);
+          }
+        });
+      });
+
+      // Comment Toggle
       document.querySelectorAll(".comment-toggle").forEach((btn) => {
         btn.addEventListener("click", () => {
           const box = document.getElementById(`comments-${btn.dataset.id}`);
@@ -228,6 +269,7 @@
         });
       });
 
+      // Submit Comment
       document.querySelectorAll(".comment-submit").forEach((btn) => {
         btn.addEventListener("click", async () => {
           const id = btn.dataset.id;
@@ -244,6 +286,7 @@
         });
       });
 
+      // Delete Post
       document.querySelectorAll(".delete-post").forEach((btn) => {
         btn.addEventListener("click", async () => {
           if (!confirm("Delete this post?")) return;

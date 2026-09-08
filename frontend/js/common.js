@@ -21,13 +21,9 @@ function requireAuth() {
 
 async function apiFetch(path, options = {}) {
   const headers = { ...(options.headers || {}) };
-  
-  // CRITICAL CHANGE: Only set application/json if the body is NOT FormData.
-  // The browser MUST set the Content-Type automatically for file uploads.
   if (!(options.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
-
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -78,9 +74,33 @@ function renderHeader() {
   const path = window.location.pathname.split("/").pop();
 
   placeholder.innerHTML = `
-    <header class="site-header">
-      <div class="header-inner">
+    <header class="site-header" style="position: relative; z-index: 50;">
+      <div class="header-inner" style="display: flex; justify-content: space-between; align-items: center;">
         <a class="logo" href="index.html"> <img id="logo" src="images/circlelogo.png" alt="Circle Logo" /> Circle</a>
+        
+        <!-- Search and Notifications Container -->
+        <div style="display: flex; align-items: center; gap: 15px;">
+          
+          <!-- Search Bar -->
+          <div style="position: relative;">
+            <input type="text" id="globalSearch" placeholder="Search users..." style="padding: 6px 12px; border-radius: 20px; border: 1px solid #334155; background: #0F172A; color: white; width: 200px; outline: none;">
+            <div id="searchResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #1E293B; border-radius: 8px; margin-top: 5px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); overflow: hidden;"></div>
+          </div>
+
+          ${user ? `
+          <!-- Notification Bell -->
+          <div style="position: relative;">
+            <button id="notifBellBtn" style="background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer; position: relative; padding: 5px;">
+              🔔 <span id="notifBadge" style="display: none; position: absolute; top: 0; right: 0; background: #E11D48; color: white; font-size: 0.6rem; font-weight: bold; padding: 2px 5px; border-radius: 10px;"></span>
+            </button>
+            <div id="notifDropdown" style="display: none; position: absolute; top: 100%; right: -10px; width: 280px; background: #1E293B; border-radius: 8px; margin-top: 5px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); max-height: 350px; overflow-y: auto;">
+              <div style="padding: 10px; border-bottom: 1px solid #334155; font-weight: bold;">Notifications</div>
+              <div id="notifList"></div>
+            </div>
+          </div>
+          ` : ""}
+        </div>
+
         <nav class="nav-links">
           <a href="index.html" class="${path === "index.html" || path === "" ? "active" : ""}">Feed</a>
           ${
@@ -95,83 +115,118 @@ function renderHeader() {
     </header>
   `;
 
-  const logoutLink = document.getElementById("logout-link");
-  if (logoutLink) {
-    logoutLink.addEventListener("click", (e) => {
+  // Attach Header Event Listeners
+  if (user) {
+    setupSearchAndNotifications();
+    document.getElementById("logout-link").addEventListener("click", (e) => {
       e.preventDefault();
       logout();
     });
   }
 }
 
-// STEP 7 LOGIC: Handle the file selection and post submission
-function setupPostCreation() {
-  const mediaInput = document.getElementById("mediaUpload"); // Matches the ID you add in HTML
-  const previewText = document.getElementById("uploadPreview"); // Matches the ID you add in HTML
-  const postContent = document.getElementById("postContent"); // Ensure your text input uses this ID
-  const publishBtn = document.getElementById("publishPostBtn"); // Ensure your post button uses this ID
+// Logic for Search and Notifications
+function setupSearchAndNotifications() {
+  const searchInput = document.getElementById("globalSearch");
+  const searchResults = document.getElementById("searchResults");
+  const notifBtn = document.getElementById("notifBellBtn");
+  const notifDropdown = document.getElementById("notifDropdown");
+  const notifList = document.getElementById("notifList");
+  const notifBadge = document.getElementById("notifBadge");
 
-  // Only run this if we are on the page with the post inputs
-  if (!mediaInput || !publishBtn) return;
-
-  // Show selected file name
-  mediaInput.addEventListener("change", function() {
-    if (this.files[0]) {
-      previewText.textContent = `Selected: ${this.files[0].name}`;
-    } else {
-      previewText.textContent = "";
-    }
-  });
-
-  // Handle post submission
-  publishBtn.addEventListener("click", async () => {
-    const content = postContent.value;
-    const mediaFile = mediaInput.files[0];
-
-    if (!content.trim() && !mediaFile) {
-      return showToast("Please add some text or select a file.");
+  // Search Logic
+  let searchTimeout;
+  searchInput.addEventListener("input", (e) => {
+    clearTimeout(searchTimeout);
+    const query = e.target.value.trim();
+    
+    if (!query) {
+      searchResults.style.display = "none";
+      return;
     }
 
-    // Disable button to prevent double-clicking while uploading
-    publishBtn.disabled = true;
-    publishBtn.textContent = "Posting...";
-
-    const formData = new FormData();
-    formData.append("content", content);
-    if (mediaFile) {
-      formData.append("media", mediaFile);
-    }
-
-    try {
-      // Use our updated apiFetch, which automatically passes FormData correctly
-      await apiFetch("/posts", {
-        method: "POST",
-        body: formData // Pass the FormData directly, DO NOT use JSON.stringify
-      });
-
-      showToast("Posted successfully!");
-      
-      // Reset inputs
-      postContent.value = "";
-      mediaInput.value = "";
-      previewText.textContent = "";
-      
-      // Refresh the feed if the function exists on this page
-      if (typeof loadPosts === "function") {
-        loadPosts();
+    searchTimeout = setTimeout(async () => {
+      try {
+        const users = await apiFetch(`/users/search/query?q=${query}`);
+        if (users.length === 0) {
+          searchResults.innerHTML = `<div style="padding: 10px; color: var(--text-secondary); text-align: center;">No users found</div>`;
+        } else {
+          searchResults.innerHTML = users.map(u => `
+            <a href="profile.html?username=${u.username}" style="display: flex; align-items: center; padding: 10px; text-decoration: none; border-bottom: 1px solid #334155; color: white;">
+              <img src="${u.avatar}" style="width: 30px; height: 30px; border-radius: 50%; object-fit: cover; margin-right: 10px;">
+              <div>
+                <div style="font-weight: bold; font-size: 0.9rem;">${escapeHtml(u.name)}</div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary);">@${u.username}</div>
+              </div>
+            </a>
+          `).join("");
+        }
+        searchResults.style.display = "block";
+      } catch (err) {
+        console.error("Search error", err);
       }
-    } catch (error) {
-      showToast(`Error: ${error.message}`);
-    } finally {
-      // Re-enable button
-      publishBtn.disabled = false;
-      publishBtn.textContent = "Post";
+    }, 300); // 300ms debounce
+  });
+
+  // Hide search results if clicked outside
+  document.addEventListener("click", (e) => {
+    if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+      searchResults.style.display = "none";
+    }
+    if (notifBtn && notifDropdown && !notifBtn.contains(e.target) && !notifDropdown.contains(e.target)) {
+      notifDropdown.style.display = "none";
     }
   });
+
+  // Notification Logic
+  async function fetchNotifications() {
+    try {
+      const notifs = await apiFetch("/users/me/notifications");
+      const unreadCount = notifs.filter(n => !n.read).length;
+      
+      if (unreadCount > 0) {
+        notifBadge.textContent = unreadCount;
+        notifBadge.style.display = "block";
+      } else {
+        notifBadge.style.display = "none";
+      }
+
+      if (notifs.length === 0) {
+        notifList.innerHTML = `<div style="padding: 15px; text-align: center; color: var(--text-secondary);">No notifications yet</div>`;
+        return;
+      }
+
+      notifList.innerHTML = notifs.map(n => `
+        <a href="profile.html?username=${n.sender.username}" style="display: flex; align-items: center; padding: 12px; text-decoration: none; border-bottom: 1px solid #334155; background: ${n.read ? 'transparent' : 'rgba(225, 29, 72, 0.1)'}; color: white; transition: background 0.2s;">
+          <img src="${n.sender.avatar}" style="width: 35px; height: 35px; border-radius: 50%; object-fit: cover; margin-right: 12px;">
+          <div style="font-size: 0.9rem;">
+            <strong>${escapeHtml(n.sender.name)}</strong> started following you.
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">${timeAgo(n.createdAt)}</div>
+          </div>
+        </a>
+      `).join("");
+    } catch (err) {
+      console.error("Notification error", err);
+    }
+  }
+
+  // Toggle Dropdown and mark as read
+  notifBtn.addEventListener("click", async () => {
+    const isHidden = notifDropdown.style.display === "none";
+    notifDropdown.style.display = isHidden ? "block" : "none";
+    
+    if (isHidden && notifBadge.style.display === "block") {
+      try {
+        await apiFetch("/users/me/notifications/read", { method: "PUT" });
+        notifBadge.style.display = "none"; 
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  });
+
+  // Fetch notifications on load
+  fetchNotifications();
 }
 
-// Initialize everything when the DOM is ready
-document.addEventListener("DOMContentLoaded", () => {
-  renderHeader();
-  setupPostCreation(); // Initialize the post button logic
-});
+document.addEventListener("DOMContentLoaded", renderHeader);

@@ -4,8 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Profile — CodeAlphaConnect</title>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
- <link rel="stylesheet" href="css/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .clickable-stat {
+      cursor: pointer;
+      transition: opacity 0.2s ease;
+    }
+    .clickable-stat:hover {
+      opacity: 0.8;
+      text-decoration: underline;
+    }
+  </style>
 </head>
 <body>
   <div id="header-placeholder"></div>
@@ -15,11 +25,87 @@
     <div id="profile-posts"></div>
   </main>
 
+  <!-- Edit Profile Modal -->
+  <div id="editProfileModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center;">
+    <div style="background: #1E293B; padding: 25px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+      <h2 style="margin-top: 0; margin-bottom: 20px; color: white;">Edit Profile</h2>
+      
+      <div style="margin-bottom: 20px;">
+        <img id="editAvatarPreview" src="" alt="Avatar Preview" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; border: 3px solid var(--primary);">
+        <br>
+        <input type="file" id="editAvatar" accept="image/*" style="display: none;">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('editAvatar').click()">Change Picture</button>
+      </div>
+      
+      <div style="margin-bottom: 15px; text-align: left;">
+        <label style="display: block; margin-bottom: 5px; color: var(--text-secondary); font-size: 0.9rem;">Name</label>
+        <input type="text" id="editName" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0F172A; color: white;">
+      </div>
+      
+      <div style="margin-bottom: 25px; text-align: left;">
+        <label style="display: block; margin-bottom: 5px; color: var(--text-secondary); font-size: 0.9rem;">Bio</label>
+        <textarea id="editBio" rows="3" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0F172A; color: white;"></textarea>
+      </div>
+      
+      <div style="display: flex; gap: 10px;">
+        <button id="cancelEditBtn" class="btn btn-outline" style="flex: 1;">Cancel</button>
+        <button id="saveProfileBtn" class="btn btn-primary" style="flex: 1;">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Followers / Following List Modal -->
+  <div id="usersListModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center;">
+    <div style="background: #1E293B; border-radius: 12px; width: 90%; max-width: 420px; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #334155;">
+        <h3 id="usersListModalTitle" style="margin: 0; color: white; font-size: 1.1rem;">Followers</h3>
+        <button id="closeUsersListBtn" style="background: none; border: none; color: var(--text-secondary); font-size: 1.2rem; cursor: pointer;">✕</button>
+      </div>
+      <div id="usersListContent" style="padding: 10px 0; overflow-y: auto; flex: 1;">
+        <!-- Users injected here -->
+      </div>
+    </div>
+  </div>
+
   <script src="js/common.js"></script>
   <script>
     const currentUser = getUser();
     const params = new URLSearchParams(window.location.search);
     const username = params.get("username");
+
+    // Modal elements for Followers / Following list
+    const usersListModal = document.getElementById("usersListModal");
+    const usersListTitle = document.getElementById("usersListModalTitle");
+    const usersListContent = document.getElementById("usersListContent");
+    const closeUsersListBtn = document.getElementById("closeUsersListBtn");
+
+    closeUsersListBtn.addEventListener("click", () => {
+      usersListModal.style.display = "none";
+    });
+
+    usersListModal.addEventListener("click", (e) => {
+      if (e.target === usersListModal) {
+        usersListModal.style.display = "none";
+      }
+    });
+
+    function openUsersList(title, users) {
+      usersListTitle.textContent = title;
+      if (!users || users.length === 0) {
+        usersListContent.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-secondary);">No ${title.toLowerCase()} yet.</div>`;
+      } else {
+        usersListContent.innerHTML = users.map((u) => `
+          <a href="profile.html?username=${u.username}" style="display: flex; align-items: center; padding: 12px 20px; text-decoration: none; border-bottom: 1px solid #334155; color: white; transition: background 0.2s;">
+            <img src="${u.avatar || 'images/default-avatar.png'}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 12px;">
+            <div>
+              <div style="font-weight: 600; font-size: 0.95rem;">${escapeHtml(u.name)}</div>
+              <div style="font-size: 0.82rem; color: var(--text-secondary);">@${u.username}</div>
+            </div>
+          </a>
+        `).join("");
+      }
+      usersListModal.style.display = "flex";
+    }
 
     async function loadProfile() {
       const headerEl = document.getElementById("profile-header");
@@ -31,7 +117,7 @@
       try {
         const user = await apiFetch(`/users/${username}`);
         const isOwnProfile = currentUser && currentUser._id === user._id;
-        const isFollowing = currentUser && user.followers.some((f) => f._id === currentUser._id);
+        const isFollowing = currentUser && user.followers.some((f) => (f._id || f) === currentUser._id);
 
         headerEl.innerHTML = `
           <div class="profile-header">
@@ -41,15 +127,15 @@
               <div class="post-username">@${user.username}</div>
               ${user.bio ? `<p style="margin:8px 0 0;font-size:0.92rem;">${escapeHtml(user.bio)}</p>` : ""}
               <div class="profile-stats">
-                <span><strong>${user.postCount}</strong> posts</span>
-                <span><strong>${user.followers.length}</strong> followers</span>
-                <span><strong>${user.following.length}</strong> following</span>
+                <span><strong>${user.postCount || 0}</strong> posts</span>
+                <span id="followers-stat" class="clickable-stat"><strong>${user.followers.length}</strong> followers</span>
+                <span id="following-stat" class="clickable-stat"><strong>${user.following.length}</strong> following</span>
               </div>
             </div>
             <div class="profile-actions">
               ${
                 isOwnProfile
-                  ? ""
+                  ? `<button class="btn btn-outline" id="edit-profile-btn">Edit Profile</button>`
                   : currentUser
                   ? `<button class="btn ${isFollowing ? "btn-outline" : "btn-primary"}" id="follow-btn" data-id="${user._id}" data-following="${isFollowing}">
                        ${isFollowing ? "Unfollow" : "Follow"}
@@ -60,6 +146,80 @@
           </div>
         `;
 
+        // Click listeners for Followers and Following counts
+        document.getElementById("followers-stat").addEventListener("click", () => {
+          openUsersList("Followers", user.followers);
+        });
+
+        document.getElementById("following-stat").addEventListener("click", () => {
+          openUsersList("Following", user.following);
+        });
+
+        // Edit Profile modal logic
+        if (isOwnProfile) {
+          const editBtn = document.getElementById("edit-profile-btn");
+          const modal = document.getElementById("editProfileModal");
+          const cancelBtn = document.getElementById("cancelEditBtn");
+          const saveBtn = document.getElementById("saveProfileBtn");
+          const avatarInput = document.getElementById("editAvatar");
+          const avatarPreview = document.getElementById("editAvatarPreview");
+
+          editBtn.addEventListener("click", () => {
+            document.getElementById("editName").value = user.name || "";
+            document.getElementById("editBio").value = user.bio || "";
+            avatarPreview.src = user.avatar;
+            modal.style.display = "flex";
+          });
+
+          avatarInput.addEventListener("change", function() {
+            const file = this.files[0];
+            if (file) {
+              avatarPreview.src = URL.createObjectURL(file);
+            }
+          });
+
+          cancelBtn.addEventListener("click", () => {
+            modal.style.display = "none";
+            avatarInput.value = ""; 
+          });
+
+          saveBtn.addEventListener("click", async () => {
+            const newName = document.getElementById("editName").value.trim();
+            const newBio = document.getElementById("editBio").value.trim();
+            const avatarFile = avatarInput.files[0];
+
+            if (!newName) return showToast("Name is required");
+
+            saveBtn.disabled = true;
+            saveBtn.textContent = "Saving...";
+
+            const formData = new FormData();
+            formData.append("name", newName);
+            formData.append("bio", newBio);
+            if (avatarFile) formData.append("avatar", avatarFile);
+
+            try {
+              const updatedUser = await apiFetch("/users/me/update", {
+                method: "PUT",
+                body: formData
+              });
+              
+              const token = localStorage.getItem("token");
+              setAuth({ token, ...updatedUser }); 
+              
+              showToast("Profile updated!");
+              modal.style.display = "none";
+              window.location.reload(); 
+            } catch (err) {
+              showToast(`Error: ${err.message}`);
+            } finally {
+              saveBtn.disabled = false;
+              saveBtn.textContent = "Done";
+            }
+          });
+        }
+
+        // Profile follow/unfollow button
         const followBtn = document.getElementById("follow-btn");
         if (followBtn) {
           followBtn.addEventListener("click", async () => {
@@ -87,20 +247,50 @@
           postsEl.innerHTML = `<div class="empty-state">No posts yet.</div>`;
           return;
         }
+        
         postsEl.innerHTML = posts
-          .map(
-            (p) => `
-          <div class="post-card">
-            <div class="post-content">${escapeHtml(p.content)}</div>
-            <div class="post-actions" style="border-top:1px solid #eee;">
-              <span>🤍 ${p.likes.length}</span>
-              <span>💬 ${p.comments.length}</span>
-              <span class="post-time" style="margin-left:auto;">${timeAgo(p.createdAt)}</span>
-            </div>
-          </div>
-        `
-          )
+          .map((p) => {
+            let mediaHtml = "";
+            if (p.mediaUrl && p.mediaType === "image") {
+              mediaHtml = `<div class="post-media" style="margin-top: 10px;">
+                             <img src="${p.mediaUrl}" alt="Post image" style="width: 100%; max-height: 500px; border-radius: 8px; object-fit: cover;">
+                           </div>`;
+            } else if (p.mediaUrl && p.mediaType === "video") {
+              mediaHtml = `<div class="post-media" style="margin-top: 10px;">
+                             <video src="${p.mediaUrl}" controls style="width: 100%; max-height: 500px; border-radius: 8px;"></video>
+                           </div>`;
+            }
+
+            const isAuthor = currentUser && (p.user._id === currentUser._id || p.user === currentUser._id);
+
+            return `
+              <div class="post-card">
+                <div class="post-content">${escapeHtml(p.content)}</div>
+                ${mediaHtml}
+                <div class="post-actions" style="border-top:1px solid #eee; display: flex; align-items: center;">
+                  <span>🤍 ${p.likes.length}</span>
+                  <span style="margin-left: 15px;">💬 ${p.comments.length}</span>
+                  <span class="post-time" style="margin-left:auto;">${timeAgo(p.createdAt)}</span>
+                  ${isAuthor ? `<button class="delete-post" data-id="${p._id}" style="margin-left:15px; color:var(--danger); border:none; background:none; cursor:pointer; font-weight:600;">Delete</button>` : ""}
+                </div>
+              </div>
+            `;
+          })
           .join("");
+
+        document.querySelectorAll(".delete-post").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            if (!confirm("Delete this post?")) return;
+            try {
+              await apiFetch(`/posts/${btn.dataset.id}`, { method: "DELETE" });
+              showToast("Post deleted successfully");
+              loadProfile(); 
+            } catch (err) {
+              showToast(err.message);
+            }
+          });
+        });
+
       } catch (err) {
         postsEl.innerHTML = `<div class="empty-state">Failed to load posts: ${escapeHtml(err.message)}</div>`;
       }
