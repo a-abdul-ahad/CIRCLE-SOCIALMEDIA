@@ -1,9 +1,51 @@
 const express = require("express");
 const User = require("../models/User");
 const Post = require("../models/Post");
+const Notification = require("../models/Notification"); // Added Notification model
 const { protect } = require("../middleware/auth");
+const upload = require("../config/upload");
 
 const router = express.Router();
+
+// @route   GET /api/users/search (Search users by name or username)
+router.get("/search/query", async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) return res.json([]);
+    const users = await User.find({
+      $or: [
+        { username: { $regex: q, $options: "i" } }, 
+        { name: { $regex: q, $options: "i" } }
+      ]
+    }).select("name username avatar").limit(8);
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// @route   GET /api/users/me/notifications (Fetch current user's notifications)
+router.get("/me/notifications", protect, async (req, res) => {
+  try {
+    const notifications = await Notification.find({ recipient: req.user.id })
+      .populate("sender", "name username avatar")
+      .sort({ createdAt: -1 })
+      .limit(20);
+    res.json(notifications);
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// @route   PUT /api/users/me/notifications/read (Mark notifications as read)
+router.put("/me/notifications/read", protect, async (req, res) => {
+  try {
+    await Notification.updateMany({ recipient: req.user.id, read: false }, { read: true });
+    res.json({ message: "Notifications marked as read" });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
 
 // @route   GET /api/users/:username  (profile by username)
 router.get("/:username", async (req, res) => {
@@ -23,13 +65,18 @@ router.get("/:username", async (req, res) => {
   }
 });
 
-// @route   PUT /api/users/me  (update own profile)
-router.put("/me/update", protect, async (req, res) => {
+// @route   PUT /api/users/me/update  (update own profile)
+router.put("/me/update", protect, upload.single("avatar"), async (req, res) => {
   try {
-    const { name, bio, avatar } = req.body;
+    const { name, bio } = req.body;
+    const updateFields = {};
+    if (name) updateFields.name = name;
+    if (bio !== undefined) updateFields.bio = bio;
+    if (req.file) updateFields.avatar = req.file.path; 
+
     const user = await User.findByIdAndUpdate(
       req.user.id,
-      { $set: { ...(name && { name }), ...(bio !== undefined && { bio }), ...(avatar && { avatar }) } },
+      { $set: updateFields },
       { new: true, runValidators: true }
     ).select("-password");
 
@@ -58,6 +105,13 @@ router.post("/:id/follow", protect, async (req, res) => {
     currentUser.following.push(targetUser._id);
     await targetUser.save();
     await currentUser.save();
+
+    // Trigger Notification for the target user
+    await Notification.create({
+      recipient: targetUser._id,
+      sender: currentUser._id,
+      type: "follow"
+    });
 
     res.json({ message: "Followed successfully" });
   } catch (err) {
