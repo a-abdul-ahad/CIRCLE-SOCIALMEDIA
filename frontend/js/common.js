@@ -78,34 +78,38 @@ function renderHeader() {
       <div class="header-inner" style="display: flex; justify-content: space-between; align-items: center;">
         <a class="logo" href="index.html"> <img id="logo" src="images/circlelogo.png" alt="Circle Logo" /> Circle</a>
         
-        <!-- Search and Notifications Container -->
-        <div style="display: flex; align-items: center; gap: 15px;">
-          
-          <!-- Search Bar -->
+        <!-- Search Bar (Now alone in the center) -->
+        <div style="display: flex; align-items: center;">
           <div style="position: relative;">
             <input type="text" id="globalSearch" placeholder="Search users..." style="padding: 6px 12px; border-radius: 20px; border: 1px solid #334155; background: #0F172A; color: white; width: 200px; outline: none;">
             <div id="searchResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #1E293B; border-radius: 8px; margin-top: 5px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); overflow: hidden;"></div>
           </div>
-
-          ${user ? `
-          <!-- Notification Bell -->
-          <div style="position: relative;">
-            <button id="notifBellBtn" style="background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer; position: relative; padding: 5px;">
-              🔔 <span id="notifBadge" style="display: none; position: absolute; top: 0; right: 0; background: #E11D48; color: white; font-size: 0.6rem; font-weight: bold; padding: 2px 5px; border-radius: 10px;"></span>
-            </button>
-            <div id="notifDropdown" style="display: none; position: absolute; top: 100%; right: -10px; width: 280px; background: #1E293B; border-radius: 8px; margin-top: 5px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); max-height: 350px; overflow-y: auto;">
-              <div style="padding: 10px; border-bottom: 1px solid #334155; font-weight: bold;">Notifications</div>
-              <div id="notifList"></div>
-            </div>
-          </div>
-          ` : ""}
         </div>
 
-        <nav class="nav-links">
+        <!-- Navigation Links & Notification Bell -->
+        <nav class="nav-links" style="display: flex; align-items: center; gap: 15px;">
           <a href="index.html" class="${path === "index.html" || path === "" ? "active" : ""}">Feed</a>
           ${
             user
-              ? `<a href="profile.html?username=${user.username}" class="${path === "profile.html" ? "active" : ""}">Profile</a>
+              ? `
+                 <a href="profile.html?username=${user.username}" class="${path === "profile.html" ? "active" : ""}">Profile</a>
+                 
+                 <!-- Sleek SVG Notification Bell -->
+                 <div style="position: relative; display: flex; align-items: center;">
+                   <button id="notifBellBtn" style="background: none; border: none; color: inherit; cursor: pointer; position: relative; padding: 4px; display: flex; align-items: center; transition: opacity 0.2s;">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                       <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                     </svg>
+                     <span id="notifBadge" style="display: none; position: absolute; top: -2px; right: -2px; background: #E11D48; color: white; font-size: 0.6rem; font-weight: bold; padding: 2px 5px; border-radius: 10px;"></span>
+                   </button>
+                   
+                   <div id="notifDropdown" style="display: none; position: absolute; top: 100%; right: -10px; width: 280px; background: #1E293B; border-radius: 8px; margin-top: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); max-height: 350px; overflow-y: auto; text-align: left; color: white; z-index: 100;">
+                     <div style="padding: 10px; border-bottom: 1px solid #334155; font-weight: bold;">Notifications</div>
+                     <div id="notifList"></div>
+                   </div>
+                 </div>
+
                  <a href="#" id="logout-link">Logout</a>`
               : `<a href="login.html">Login</a>
                  <a href="register.html">Register</a>`
